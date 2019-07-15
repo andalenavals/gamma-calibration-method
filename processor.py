@@ -10,8 +10,10 @@ def FWHM(E, modelpars):
     a, b, c = modelpars
     return a*E + b*np.sqrt(E) + c 
 def AddFWHM(h, name, modelpars):
+    import random
     from ROOT import TH1I,  TRandom
-    ran = TRandom(123)
+    seed = random.randint(0, 500)
+    ran = TRandom(seed)
     nbins = h.GetNbinsX()
     hout = TH1I(name,'', nbins, h.GetBinLowEdge(1), h.GetXaxis().GetBinUpEdge(nbins) )
     for i in range(1, nbins + 1):
@@ -23,9 +25,9 @@ def CalFunction(x, calpars):
     slope, intercept = calpars
     return slope*x +  intercept
 def Rebin(h, name, newbinwidth, xlow):
+    import random
     from ROOT import TH1I,  TRandom
-    ran = TRandom(123)
-    binw = h.GetBinWidth(1)
+    binwidth = h.GetBinWidth(1);
     nbins = h.GetNbinsX()
     xup = h.GetXaxis().GetBinUpEdge(nbins)
     L = xup - xlow
@@ -36,12 +38,15 @@ def Rebin(h, name, newbinwidth, xlow):
       newnbin= int(L/newbinwidth)+1 ;
       newxup=xup+newbinwidth;
       h2= TH1I(name , "" , newnbin , xlow , newxup )
+
+    seed = random.randint(0, 500)
+    ran = TRandom(seed)
     for i in range(1, nbins + 1):
         for j in range(1, int(h.GetBinContent(i)) + 1):
-            h2.Fill( ran.Uniform(h.GetBinLowEdge(i) , h.GetXaxis().GetBinUpEdge(i) ) );
+            h2.Fill( ran.Uniform(h.GetBinLowEdge(i) , h.GetXaxis().GetBinUpEdge(i) ) )
     return h2
       
-def Calibrate(h, name, calpars, newbinwidth=None, xlow=None ):
+def Calibrate(h, name, calpars, newbinwidth=None, xlow=None):
     import numpy as np
     #We first create and histogram with no uniform binning 
     h2= h.Clone(name)  
@@ -53,17 +58,6 @@ def Calibrate(h, name, calpars, newbinwidth=None, xlow=None ):
         name = '%s_rebin'%(name)  
         h2 = Rebin(h2, name,  newbinwidth, xlow)
     return h2
-
-def PrettyPlot(x, y, color='black', marker=None, label=None, xlabel='x-axis', ylabel='y-axis', alsize=24, legendsize=24, filepath='outplot.png'):
-    plt.plot(x, y, color=color, marker=marker,  label=label)
-    plt.xlim( [min(x),max(x)] )
-    plt.ylim(ymin=0)
-    plt.xlabel(xlabel, fontsize=alsize)
-    plt.ylabel(ylabel, fontsize=alsize)
-    plt.legend(loc='best', fontsize=legendsize)
-    plt.tight_layout()
-    print("Printing file: ", filepath)
-    plt.savefig(filepath)
 
 def GetNoEmptyLowbin(h):
     for i in range(1, h.GetNbinsX() + 1):
@@ -87,8 +81,8 @@ def FindHigherNoEmptyLowbin(h1, h2):
 def FindLowerNoEmptyUpbin(h1, h2):
     ubin1 = GetNoEmptyUpbin(h1)
     ubin2 = GetNoEmptyUpbin(h2)
-    if (lbin1>lbin2): return lbin2
-    else: return lbin1
+    if (ubin1>ubin2): return ubin2
+    else: return ubin1
 
 def Scale(h, name, scale ):
     h2= h.Clone(name)

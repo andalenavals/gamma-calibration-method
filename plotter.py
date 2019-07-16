@@ -3,8 +3,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 plt.style.use('SVA1StyleSheet.mplstyle')
 
-def PrettyPlot(x, y, color='black', marker=None, label=None, xlabel='x-axis', ylabel='y-axis', alsize=24, legendsize=24):
-    plt.plot(x, y, color=color, marker=marker,  label=label)
+def PrettyPlot(x, y, color='black', marker=None, label=None, xlabel='x-axis', ylabel='y-axis', alsize=24, legendsize=24, alpha=1.):
+    plt.plot(x, y, color=color, marker=marker,  label=label, alpha=alpha)
     plt.xlim( [min(x),max(x)] )
     plt.ylim(ymin=0)
     plt.xlabel(xlabel, fontsize=alsize)

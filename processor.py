@@ -12,7 +12,8 @@ def FWHM(E, modelpars):
 def AddFWHM(h, name, modelpars):
     import random
     from ROOT import TH1I,  TRandom
-    seed = random.randint(0, 500)
+    #seed = random.randint(0, 500)
+    seed = 123
     ran = TRandom(seed)
     nbins = h.GetNbinsX()
     hout = TH1I(name,'', nbins, h.GetBinLowEdge(1), h.GetXaxis().GetBinUpEdge(nbins) )
@@ -39,7 +40,8 @@ def Rebin(h, name, newbinwidth, xlow):
       newxup=xup+newbinwidth;
       h2= TH1I(name , "" , newnbin , xlow , newxup )
 
-    seed = random.randint(0, 500)
+    #seed = random.randint(0, 500)
+    seed = 123
     ran = TRandom(seed)
     for i in range(1, nbins + 1):
         for j in range(1, int(h.GetBinContent(i)) + 1):

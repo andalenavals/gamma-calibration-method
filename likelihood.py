@@ -15,14 +15,29 @@ def chi2(pars, hexp, hsim, binlow=None, binup=None):
         else: sigma2 = hexp.GetBinContent(i)
         #print (i,  hsim_fwhm_ch.GetBinContent(i))
         chisqr.append( ((hexp.GetBinContent(i) -  hsim_fwhm_ch_sc.GetBinContent(i))**2)/sigma2 ) 
-    #print(pars, np.array(chisqr).sum())
-    return np.array(chisqr).sum()
+    print(pars, np.array(chisqr).sum())
+    return np.array(chisqr).sum()  
 
-    
+#concatenation of expectras to get the total fit
+def chi2_list(pars, hexp_list, hsim_list, binlow_list=None, binup_list=None):
+    import numpy as np
+    nexps = len(hexp_list)
+    if binlow_list == None: binlow_list =  [None]*nexps
+    if binup_list == None: binup_list =  [None]*nexps 
+    if (len(hexp_list)==len(hsim_list)):
+        return np.array([chi2(pars, hexp_list[i], hsim_list[i], binlow=binlow_list[i], binup=binup_list[i]) for i in range(nexps)]).sum()
 def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=None):
     import scipy.optimize as optimize
     #result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, binlow, binup), method='SLSQP', bounds=bounds)
     result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, binlow, binup), method='Nelder-Mead', tol=1e-6)
+    if result.success:
+        fitted_params = result.x
+        return fitted_params, result.fun
+    else:
+        raise ValueError(result.message)
+def minimizeCHI2_list(initial_guess, hexp_list, hsim_list, bounds=None,  binlow_list=None, binup_list=None):
+    import scipy.optimize as optimize
+    result = optimize.minimize(chi2_list, initial_guess,args=(hexp_list, hsim_list, binlow_list, binup_list), method='Nelder-Mead', tol=1e-6)
     if result.success:
         fitted_params = result.x
         return fitted_params, result.fun
@@ -92,9 +107,11 @@ def corner_plot(samples, labels, title):
     plt.savefig(title)
     print(title, "Printed")
 def MCMC(best_pars, hexp, hsim, binlow=None, binup=None,  nwalkers=50, nsteps=1000,  mflags=[True, True]):
+    import itertools
+    import numpy as np
     import emcee
     import itertools
-    ndim =  len(list(itertools.compress(xrange(len(mflags)),  mflags))) + 3
+    ndim =  len(list(itertools.compress(range(len(mflags)),  mflags))) + 3
     pos = [best_pars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
     sampler = emcee.EnsembleSampler(nwalkers, ndim, logpost, threads=1,
                                     args=(hexp, hsim, binlow, binup, mflags))

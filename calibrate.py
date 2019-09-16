@@ -2,6 +2,7 @@ import os
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+
 plt.style.use('SVA1StyleSheet.mplstyle')
 
 def parse_args():
@@ -24,6 +25,7 @@ def parse_args():
                         help='list of .dat file of the experimental data')
     parser.add_argument('--outpath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/plots',
                         help='location of the output of the files')
+    parser.add_argument('--mcmc', default=False, action='store_const', const=True, help='Run mcmc to get posterior of parameters')
     parser.add_argument('--nsig', default=1, type=int, 
                         help='How many sigmas for the marginalized confidence interval')
     parser.add_argument('--nsteps', default=1000, type=int, 
@@ -67,7 +69,8 @@ def main():
     import numpy as np
     from processor import SaveInTH1, AddFWHM, Calibrate, GetScaleFactor, Scale, FindLowerNoEmptyUpbin,  FindHigherNoEmptyLowbin
     from plotter import PrettyPlot,  plot_samplesdist
-    from likelihood import minimizeCHI2,  chi2,  MCMC, minimizeCHI2_list,  chi2_list
+    from likelihood import minimizeCHI2,  chi2,  MCMC, minimizeCHI2_list,  chi2_list,  TransfSIM
+    from ROOT import TCanvas,  gStyle, kFALSE
 
     args = parse_args()
 
@@ -77,8 +80,22 @@ def main():
             os.makedirs(outpath)
     except OSError:
         if not os.path.exists(outpath): raise
+
+    if args.plots:
+        '''
+        canvas = TCanvas("c1", "", 800, 600)
+        canvas.SetBottomMargin( 0.15 )
+        canvas.SetTopMargin( 0.15 )
+        canvas.SetLeftMargin( 0.15 )
+        canvas.SetRightMargin( 0.15 )
+        gStyle.SetOptStat(kFALSE)
+        '''
+        filename = os.path.join(outpath, 'animation.gif')
+    else:
+        canvas = None
     
     if args.singlesource:
+        print("Fitting using only one source",  args.simfile)
         #Save data in arrays
         ch_sim, counts_sim = np.loadtxt(args.simfile, dtype=int, unpack=True)
         ch_exp, counts_exp = np.loadtxt(args.measurefile, dtype=int, unpack=True)
@@ -100,63 +117,108 @@ def main():
             print('chisq_red:', chi2(pars, hexp, hsim, binlow=binlow, binup=binup)/(binup - binlow) )      
         else:
             #i_guess = [1, 1, 1, 1, 1]
-            i_guess = [0.027, 1.2,  0, 1.3 , -15.6] 
+            #i_guess = [0.027, 1.2,  0, 1.3 , -15.6] 
+            i_guess = [0, 0, 0, 1, 0] 
             #bnds =  ((None, None), (None, None), (None, None), (None, None), (None, None))
 
             ##FIRST GUESS USING THE WHOLE EXPERIMENTAL SPECTRUM
-            pars, chisq = minimizeCHI2(i_guess, hexp, hsim)
+            '''
+            if args.plots: pars, chisq, imags = minimizeCHI2(i_guess, hexp, hsim, filename=filename)
+            else: pars, chisq= minimizeCHI2(i_guess, hexp, hsim)
             print('FIRST GUESS. Chisq_nu:',  chisq/nbins_exp)
             fwhmpars = pars[:3]
             calpars =  pars[3:]
             print('FIRST GUESS. FWHM pars a*E + b*np.sqrt(E) + c:',  fwhmpars)
             print('FIRST GUESS. Calibration pars mx +d:',  calpars)
+            '''
   
             #DEPURATING SELECTING PROPER HIGH AND LOW LIMIT
-            binlow, binup = 1, nbins_exp
-            binlow_new, binup_new = 0, 0
-            while(binlow_new!=binlow and binup_new!=binup):
-                print('Entering in depurating mode')
-                binlow = binlow_new; binup = binup_new
-                hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars)
-                hsim_fwhm_ch = Calibrate(hsim_fwhm, 'hist_sim_fwhm_cal', calpars, newbinwidth=1, xlow=0)
-                binlow_new = FindHigherNoEmptyLowbin(hexp, hsim_fwhm_ch)
-                binup_new = FindLowerNoEmptyUpbin(hexp, hsim_fwhm_ch)
-                print('Depurated binlow and binup:',  binlow_new, binup_new)
-                pars, chisq = minimizeCHI2(pars, hexp, hsim, binlow=binlow_new, binup=binup_new)
-                print('Depurated. Chisq_nu:',  chisq/(binup_new - binlow_new))
+            pars = i_guess; imags = []
+            chisqold, chisq =  0, 1.e+10
+            binlow, binup = None,  None
+            binlow_old, binup_old = 0, 0
+            filename = os.path.join(outpath, 'pars_history.txt')
+            while(binlow!=binlow_old or binup!=binup_old or chisq<chisqold ):
+                pars, chisq, pars_hist = minimizeCHI2(pars, hexp, hsim, binlow=binlow, binup=binup, filename=filename)
+                print('Chisq_nu:',  chisq/(binup - binlow))
                 fwhmpars = pars[:3]
                 calpars =  pars[3:]
-                print('Depurated. FWHM pars a*E + b*np.sqrt(E) + c:',  fwhmpars)
-                print('Depurated. Calibration pars mx +d:',  calpars)
-              
-            
+                print('FWHM pars a*E + b*np.sqrt(E) + c:',  fwhmpars)
+                print('Calibration pars mx +d:',  calpars)
+                
+                binlow_old = binlow; binup_old = binup; chisqold = chisq
+                hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars)
+                hsim_fwhm_ch = Calibrate(hsim_fwhm, 'hist_sim_fwhm_cal', calpars, newbinwidth=1, xlow=0)
+                binlow = FindHigherNoEmptyLowbin(hexp, hsim_fwhm_ch)
+                binup = FindLowerNoEmptyUpbin(hexp, hsim_fwhm_ch)
+                print('Depurated binlow and binup:',  binlow, binup)
 
             #MCMC (GETTING ERRORS OF ESTIMATES)
-            mflags = [True, True]
-            samples, chains =  MCMC(pars, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
-            mcmcpath = os.path.join(outpath, 'mcmc_walkers.png')
-            parscontoursparth = os.path.join(outpath, 'par_contours.png')
-            if args.plots: plot_samplesdist(samples, chains, mflags, args.nwalkers, args.nsteps, mcmcpath, parscontoursparth )
-        
-        print(binlow, binup)
-        hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars)
-        hsim_fwhm_ch = Calibrate(hsim_fwhm, 'hist_sim_fwhm_cal', calpars, newbinwidth=1, xlow=0)
-        scalefactor =  GetScaleFactor(hexp, hsim_fwhm_ch, binlow=binlow, binup=binup)
-        print('the scale factor is', scalefactor)
-        hsim_fwhm_ch_sc = Scale(hsim_fwhm_ch, 'hist_sim_fwhm_cal_sc',  scalefactor )
-        ch_exp = [ hexp.GetBinCenter(i) for i in range(binlow, binup + 1)]
-        counts_exp =  [ hexp.GetBinContent(i) for i in range(binlow, binup + 1)]
-        ch_sim_fwhm = [ hsim_fwhm.GetBinCenter(i) for i in range(binlow, binup + 1)]
-        counts_sim_fwhm =  [hsim_fwhm.GetBinContent(i) for i in range(binlow, binup + 1)]
-        ch_sim_fwhm_ch = [ hsim_fwhm_ch.GetBinCenter(i) for i in range(binlow, binup + 1)]
-        counts_sim_fwhm_ch =  [hsim_fwhm_ch.GetBinContent(i) for i in range(binlow, binup + 1)]
-        ch_sim_fwhm_ch_sc = [ hsim_fwhm_ch_sc.GetBinCenter(i) for i in range(binlow, binup + 1)]
-        counts_sim_fwhm_ch_sc =  [hsim_fwhm_ch_sc.GetBinContent(i) for i in range(binlow, binup + 1)]
-        #print(hsim_fwhm_ch.GetNbinsX())
-    
-    
+            if args.mcmc:
+                mflags = [True, True]
+                samples, chains =  MCMC(pars, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
+                mcmcpath = os.path.join(outpath, 'mcmc_walkers.png')
+                parscontoursparth = os.path.join(outpath, 'par_contours.png')
+                if args.plots: plot_samplesdist(samples, chains, mflags, args.nwalkers, args.nsteps, mcmcpath, parscontoursparth )
 
+        #Animation using pars_history
         if(args.plots):
+            fig = plt.figure()
+            images = []
+            for i, x in enumerta(pars_hist):
+                hsimaux = TransfSIM(hsim, x, hexp, binlow=binlow, binup=binup)
+                ch_sim = [ hsimaux.GetBinCenter(i) for i in range(binlow, binup + 1)]
+                counts_sim =  [ hsimaux.GetBinContent(i) for i in range(binlow, binup + 1)]
+                ch_exp = [ hexp.GetBinCenter(i) for i in range(binlow, binup + 1)]
+                counts_exp =  [ hexp.GetBinContent(i) for i in range(binlow, binup + 1)]
+               
+                plt1a, = plt.plot(ch_exp, counts_exp, color='red', marker=None, label='Experiment', alpha=1)
+                #plt1a  = plt.scatter(ch_exp, counts_exp, color='red', marker=None, label='Experiment', alpha=1)
+                plt1b = plt.xlim( [min(ch_exp),max(ch_exp,)] )
+                plt1c = plt.ylim(ymin=0)
+                if(i == 0): plt.legend(fontsize=14)
+
+                plt2a,  = plt.plot(ch_sim, counts_sim, color='blue', marker=None, label='Simulation', alpha=1)
+                #plt2a = plt.scatter(ch_sim, counts_sim, color='blue', marker=None, label='Simulation', alpha=1)
+                plt2b = plt.xlim( [min(ch_sim),max(ch_sim,)] )
+                plt2c = plt.ylim(ymin=0)
+                if(i == 0): plt.legend(fontsize=14)
+
+                ax = plt.gca()
+                fwhmpars =  x[: 3]
+                calpars =  x[3:]
+                text1 = plt.text(0.45, 1.1,  r'$\chi^{2}_{\nu}$ = %.3f'%( chisq/(binupaux - binlowaux) ), fontsize=12, transform= ax.transAxes)
+                text2 = plt.text(0.5, 1.01, r'FWHM(E) = %.2fE %+.2f$\sqrt{E}$ %+.2f'%(fwhmpars[0], fwhmpars[1], fwhmpars[2]), fontsize=12, transform= ax.transAxes)
+                text3 = plt.text(0, 1.01, r'Channel(E) = %.2fE %+.2f'%(calpars[0], calpars[1]), fontsize=12, transform= ax.transAxes)
+                
+                images.append([plt1a, plt2a, text1, text2, text3])
+                print(len(images))
+            ani = animation.ArtistAnimation(fig, images, interval=200, repeat_delay=10000)
+            #ani = animation.ArtistAnimation(fig, images, interval=10000, blit=False, repeat=False)
+            print("Printing file: ", filename)
+            ani.save(filename, writer='imagemagick', fps=2, dpi=300)
+                
+            
+
+                
+        #Plots with the final estimate
+        if(args.plots):
+            print(binlow, binup)
+            hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars)
+            hsim_fwhm_ch = Calibrate(hsim_fwhm, 'hist_sim_fwhm_cal', calpars, newbinwidth=1, xlow=0)
+            scalefactor =  GetScaleFactor(hexp, hsim_fwhm_ch, binlow=binlow, binup=binup)
+            print('the scale factor is', scalefactor)
+            hsim_fwhm_ch_sc = Scale(hsim_fwhm_ch, 'hist_sim_fwhm_cal_sc',  scalefactor )
+            ch_exp = [ hexp.GetBinCenter(i) for i in range(binlow, binup + 1)]
+            counts_exp =  [ hexp.GetBinContent(i) for i in range(binlow, binup + 1)]
+            ch_sim_fwhm = [ hsim_fwhm.GetBinCenter(i) for i in range(binlow, binup + 1)]
+            counts_sim_fwhm =  [hsim_fwhm.GetBinContent(i) for i in range(binlow, binup + 1)]
+            ch_sim_fwhm_ch = [ hsim_fwhm_ch.GetBinCenter(i) for i in range(binlow, binup + 1)]
+            counts_sim_fwhm_ch =  [hsim_fwhm_ch.GetBinContent(i) for i in range(binlow, binup + 1)]
+            ch_sim_fwhm_ch_sc = [ hsim_fwhm_ch_sc.GetBinCenter(i) for i in range(binlow, binup + 1)]
+            counts_sim_fwhm_ch_sc =  [hsim_fwhm_ch_sc.GetBinContent(i) for i in range(binlow, binup + 1)]
+            #print(hsim_fwhm_ch.GetNbinsX())
+            
             #Original Simulation
             plt.clf()
             filepath = os.path.join(outpath, 'original_sim.png')
@@ -192,6 +254,7 @@ def main():
             plt.savefig(filepath, dpi=200)
 
     else:
+        print("Fitting using", len(args.simfiles) , " sources:",  args.simfiles)
         #Concatenation all the spectra of the same detector for a unique fit
         hexp_list, hsim_list = [], []
         nexps = len(args.simfiles)
@@ -211,12 +274,13 @@ def main():
             print('chisq_red:', chi2_list(pars, hexp_list, hsim_list, binlow_list=binlow_list, binup_list=binup_list)/ndof)      
         else:
             #i_guess = [1, 1, 1, 1, 1]
-            i_guess = [0.027, 1.2,  0, 1.3 , -15.6] 
+            #i_guess = [0.027, 1.2,  0, 1.3 , -15.6]
+            i_guess = [0, 0, 0, 1, 0] 
             #bnds =  ((None, None), (None, None), (None, None), (None, None), (None, None))
 
             ##FIRST GUESS USING THE WHOLE EXPERIMENTAL SPECTRUM
             pars, chisq = minimizeCHI2_list(i_guess, hexp_list, hsim_list)
-            ndof =  (np.array(binup_list) - np.array(binlow_list)).sum()
+            ndof =  np.array([hexp_list[i].GetNbinsX for i in range(nexps)]).sum()
             print('FIRST GUESS. Chisq_nu:',  chisq/ndof)
             fwhmpars = pars[:3]
             calpars =  pars[3:]

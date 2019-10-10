@@ -64,10 +64,12 @@ def main():
     fwhmpars = [parsfile['a'], parsfile['b'], parsfile['c']]
     calpars = [ parsfile['m'], parsfile['d']]
     i_guess =  fwhmpars + calpars
+    i_guess = np.array(i_guess)[args.mflags + [True]*2]
     binlow =  parsfile['binlow']
     binup =  parsfile['binup']
-    print('Initial parameters:',  parsfile)
-    chisq =  chi2(i_guess, hexp, hsim, binlow=binlow, binup=binup)
+    print('Initial parameters file:',  parsfile)
+    print('Initial parameters:',  i_guess)
+    chisq =  chi2(i_guess, hexp, hsim, mflags=args.mflags, binlow=binlow, binup=binup)
     print('Initial Chisq_nu:',  chisq/(binup - binlow))
 
     print('Initial low bin divergence',  binlow - GetNoEmptyLowbin(hexp))
@@ -76,7 +78,7 @@ def main():
     binup = GetNoEmptyUpbin(hexp)
     print('Limit bins used:', binlow, binup)
 
-    #DEPURATING SELECTING PROPER HIGH AND LOW LIMIT
+    #START THE ITERATION
     pars = i_guess; 
     chisqold, chisq =  0, 1.e+10
     binlow_old, binup_old = 0, 0
@@ -93,8 +95,8 @@ def main():
         binlow_old = binlow; binup_old = binup; chisqold = chisq
         pars, chisq = minimizeCHI2(pars, hexp, hsim, mflags=args.mflags,  binlow=binlow, binup=binup, pars_hist=pars_hist,  verbose=args.verbose)
        
-        fwhmpars = pars[:3]
-        calpars =  pars[3:]
+        calpars =  pars[-2:]
+        fwhmpars =  pars[:len(pars)-len(calpars) ]
         print('FWHM pars a*E + b*np.sqrt(E) + c:',  fwhmpars)
         print('Calibration pars mx +d:',  calpars)
         print('Chisq_nu:',  chisq/(binup - binlow))
@@ -106,7 +108,12 @@ def main():
         n += 1
 
     data = {}
-    data['a'] = float(pars[0]); data['b'] = float(pars[1]); data['c'] = float(pars[2]); data['m'] = float(pars[3]); data['d'] = float(pars[4])
+    af, bf, cf = args.mflags
+    if (af, bf, cf):
+        data['a'] = float(pars[0]); data['b'] = float(pars[1]); data['c'] = float(pars[2])
+    if (bf, cf):
+        data['b'] = float(pars[0]); data['c'] = float(pars[1])
+    data['m'] = float(calpars[0]); data['d'] = float(calpars[1])
     data['binlow'] = int(binlow)
     data['binup'] =  int(binup)
     data['chisq'] = float(chisq/(binup - binlow))

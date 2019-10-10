@@ -40,11 +40,10 @@ def chi2_list(pars, hexp_list, hsim_list, binlow_list=None, binup_list=None):
     if (len(hexp_list)==len(hsim_list)):
         return np.array([chi2(pars, hexp_list[i], hsim_list[i], binlow=binlow_list[i], binup=binup_list[i]) for i in range(nexps)]).sum()
 
-def minimizeCHI2(initial_guess, hexp, hsim, mflags=None,  binlow=None, binup=None,  pars_hist=None,  verbose=False):
+def minimizeCHI2(initial_guess, hexp, hsim, mflags=[True, True, True],  binlow=None, binup=None,  pars_hist=None,  verbose=False):
     from plotter import PrettyPlot
     import numpy as np 
     import scipy.optimize as optimize
-
     if pars_hist is not None:
         chis =  [1.e+20]
         def callback(x):

@@ -6,7 +6,7 @@ plt.style.use('SVA1StyleSheet.mplstyle')
 def PrettyPlot(x, y, color='black', marker=None, label=None, xlabel='x-axis', ylabel='y-axis', alsize=24, legendsize=24, alpha=1.):
     plt.plot(x, y, color=color, marker=marker,  label=label, alpha=alpha)
     plt.xlim( [min(x),max(x)] )
-    plt.ylim(ymin=0)
+    plt.ylim([0, 1.05* max(y)])
     plt.xlabel(xlabel, fontsize=alsize)
     plt.ylabel(ylabel, fontsize=alsize)
     plt.legend(loc='best', fontsize=legendsize)

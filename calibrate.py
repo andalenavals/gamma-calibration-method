@@ -7,7 +7,7 @@ plt.style.use('SVA1StyleSheet.mplstyle')
 
 def parse_args():
     import argparse
-    parser = argparse.ArgumentParser(description='Alpha beta gamma test solving the fitting problem of system of equatiosn, plotting correlations and final correlation function with bias')
+    parser = argparse.ArgumentParser(description='Finding best resolution and energy calibration parameters comparing Geant4 simulations and experiment. Errors in the esmatimated parameters are calculated using MCMC and marginalization of the posterior distribution.')
     
     parser.add_argument('--simfile',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/sims/Sim_NaI2x2_22Na.dat',
@@ -23,8 +23,10 @@ def parse_args():
                         default=['/data/publishing/gamma_calibration_method/gamma-calibration-method/data/experiment/Exp_NaI2x2_22Na.dat',
                         '/data/publishing/gamma_calibration_method/gamma-calibration-method/data/experiment/Exp_NaI2x2_137Cs.dat'],
                         help='list of .dat file of the experimental data')
-    parser.add_argument('--outpath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/plots',
+    parser.add_argument('--plotspath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/plots',
                         help='location of the output of the files')
+    parser.add_argument('--outpath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method',
+                        help='location of the output of the plots')
     parser.add_argument('--mcmc', default=False, action='store_const', const=True, help='Run mcmc to get posterior of parameters')
     parser.add_argument('--nsig', default=1, type=int, 
                         help='How many sigmas for the marginalized confidence interval')
@@ -81,16 +83,15 @@ def main():
     except OSError:
         if not os.path.exists(outpath): raise
 
+    plotspath = os.path.expanduser(args.plotspath)
+    try:
+        if not os.path.exists(plotspath):
+            os.makedirs(plotspath)
+    except OSError:
+        if not os.path.exists(plotspath): raise
+
     if args.plots:
-        '''
-        canvas = TCanvas("c1", "", 800, 600)
-        canvas.SetBottomMargin( 0.15 )
-        canvas.SetTopMargin( 0.15 )
-        canvas.SetLeftMargin( 0.15 )
-        canvas.SetRightMargin( 0.15 )
-        gStyle.SetOptStat(kFALSE)
-        '''
-        filename = os.path.join(outpath, 'animation.gif')
+        filename = os.path.join(plotspath, 'animation.gif')
     else:
         canvas = None
     
@@ -157,8 +158,8 @@ def main():
             if args.mcmc:
                 mflags = [True, True]
                 samples, chains =  MCMC(pars, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
-                mcmcpath = os.path.join(outpath, 'mcmc_walkers.png')
-                parscontoursparth = os.path.join(outpath, 'par_contours.png')
+                mcmcpath = os.path.join(plotspath, 'mcmc_walkers.png')
+                parscontoursparth = os.path.join(plotspath, 'par_contours.png')
                 if args.plots: plot_samplesdist(samples, chains, mflags, args.nwalkers, args.nsteps, mcmcpath, parscontoursparth )
 
         #Animation using pars_history
@@ -221,31 +222,31 @@ def main():
             
             #Original Simulation
             plt.clf()
-            filepath = os.path.join(outpath, 'original_sim.png')
+            filepath = os.path.join(plotspath, 'original_sim.png')
             PrettyPlot(ch_sim, counts_sim, color='blue', marker=None, label='Simulation', xlabel='Energy (keV)', ylabel='Counts', alsize=24, legendsize=24)
             print("Printing file: ", filepath)
             plt.savefig(filepath, dpi=200)
             #Original Experiment
             plt.clf()
-            filepath = os.path.join(outpath, 'original_exp.png')
+            filepath = os.path.join(plotspath, 'original_exp.png')
             PrettyPlot(ch_exp, counts_exp, color='red', marker=None, label='Experiment', xlabel='Channel', ylabel='Counts', alsize=24, legendsize=24)
             print("Printing file: ", filepath)
             plt.savefig(filepath, dpi=200)
             #Sim with FWHM
             plt.clf()
-            filepath = os.path.join(outpath, 'sim_fwhm.png')
+            filepath = os.path.join(plotspath, 'sim_fwhm.png')
             PrettyPlot(ch_sim_fwhm, counts_sim_fwhm, color='blue', marker=None, label='Simulation with GEB', xlabel='Energy (keV)', ylabel='Counts', alsize=24, legendsize=18)
             print("Printing file: ", filepath)
             plt.savefig(filepath, dpi=200)
             #Sim with FWHM in channels
             plt.clf()
-            filepath = os.path.join(outpath, 'sim_fwhm_ch.png')
+            filepath = os.path.join(plotspath, 'sim_fwhm_ch.png')
             PrettyPlot(ch_sim_fwhm_ch, counts_sim_fwhm_ch, color='blue', marker=None, label='Simulation with GEB', xlabel='Channel', ylabel='Counts', alsize=24, legendsize=15)
             print("Printing file: ", filepath)
             plt.savefig(filepath, dpi=200)
             #Comparison exp with sim with FWHM and in channels
             plt.clf()
-            filepath = os.path.join(outpath, 'exp_vs_sim_fwhm_ch_sc.png')
+            filepath = os.path.join(plotspath, 'exp_vs_sim_fwhm_ch_sc.png')
             PrettyPlot(ch_exp, counts_exp, color='red', marker=None, label='Experiment', xlabel='Channel', ylabel='Counts', alsize=24, legendsize=15, alpha=.7)
             PrettyPlot(ch_sim_fwhm_ch_sc, counts_sim_fwhm_ch_sc, color='blue', marker=None, label='Simulation with GEB', xlabel='Channel', ylabel='Counts', alsize=24, legendsize=15, alpha=.8)
             plt.title(r'2$\times$2 NaI detector with a $^{137}$Cs source')
@@ -308,9 +309,9 @@ def main():
                 
             #MCMC (GETTING ERRORS OF ESTIMATES)
             #mflags = [True, True]
-            #samples, chains =  MCMC(print()ars, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
-            #mcmcpath = os.path.join(outpath, 'mcmc_walkers.png')
-            #parscontoursparth = os.path.join(outpath, 'par_contours.png')
+            #samples, chains =  MCMC(pars, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
+            #mcmcpath = os.path.join(plotspath, 'mcmc_walkers.png')
+            #parscontoursparth = os.path.join(plotspath, 'par_contours.png')
             #if args.plots: plot_samplesdist(samples, chains, mflags, args.nwalkers, args.nsteps, mcmcpath, parscontoursparth )
         
         print('Depurated binlow_list and binup_list:', binlow_list, binup_list)
@@ -333,7 +334,7 @@ def main():
                 PrettyPlot(ch_sim_fwhm_ch_sc_list[i], counts_sim_fwhm_ch_sc_list[i], color='blue', marker=None, label='Simulation', xlabel='Channel', ylabel='Counts', alsize=24, legendsize=15, alpha=.8)
                 plt.title(titles_list[i])
                 plt.tight_layout()
-                filepath = os.path.join(outpath, names_list[i])
+                filepath = os.path.join(plotspath, names_list[i])
                 print("Printing file: ", filepath)
                 plt.savefig(filepath, dpi=200)
 
@@ -346,6 +347,5 @@ if __name__ == "__main__":
 
 
 ''' Note Simulation of the 3x3 detector is missing of the 1200 keV
-peak.  This is way the global minimum does not match the expected
-calibration values
+peak do not include in the analysis.
 '''

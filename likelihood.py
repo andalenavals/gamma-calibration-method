@@ -39,46 +39,26 @@ def chi2_list(pars, hexp_list, hsim_list, binlow_list=None, binup_list=None):
     if (len(hexp_list)==len(hsim_list)):
         return np.array([chi2(pars, hexp_list[i], hsim_list[i], binlow=binlow_list[i], binup=binup_list[i]) for i in range(nexps)]).sum()
 
-def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=None,  filename=None):
+def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=None,  pars_hist=None,  verbose=False):
     from plotter import PrettyPlot
     import numpy as np 
     import scipy.optimize as optimize
-  
-    chis =  [1.e+20]; pars_hist = []
-    def callback(x):
-        chisq = chi2(x, hexp, hsim, binlow, binup)
-        chis.append(chisq)
-        if (chis[-1] < chis[-2]):
-            print('current parameters, chisq:',  x, chisq)
-            pars_hist.append(x)
-            np.savetxt(filename, pars_hist, fmt='%1.4e')
+
+    if pars_hist is not None:
+        chis =  [1.e+20]
+        def callback(x):
+            chisq = chi2(x, hexp, hsim, binlow, binup)
+            chis.append(chisq)
+            if (chis[-1] < chis[-2]):
+                print('current parameters, chisq_nu:',  x,  chisq/(binup - binlow))
+                pars_hist.append(x + [chisq])
+               
+    elif verbose and pars_hist is None:
+        def callback(x):
+            chisq = chi2(x, hexp, hsim, binlow, binup)
+            print('current parameters, chisq_nu:',   x,  chisq/(binup - binlow) )
+    else: callback = None
     
-    result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, binlow, binup), method='Nelder-Mead', tol=1e-6,  callback=callback )
-
-    if result.success:
-        fitted_params = result.x
-        if filename:
-            return fitted_params, result.fun, pars_hist 
-        else:
-            return fitted_params, result.fun
-    else:
-        raise ValueError(result.message)
-
-'''
-def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=None,  canvas=None):
-    from ROOT import kRed, kBlue
-    import scipy.optimize as optimize
-    #result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, binlow, binup), method='SLSQP', bounds=bounds)
-    #result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, binlow, binup), method='Nelder-Mead', tol=1e-6,  options={'disp': True} )
-    def callback(x):
-        print('current parameters, chis_nu:',  x, chi2(x, hexp, hsim, binlow, binup))
-        if canvas is not None:
-            hsimaux = TransfSIM(hsim, x, hexp, binlow=binlow, binup=binup)
-            hsimaux.SetLineColor(kBlue)
-            hsimaux.Draw("same")
-            hexp.SetLineColor(kRed)
-            hexp.Draw("same")
-            canvas.Print("animation.gif+100")
     result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, binlow, binup), method='Nelder-Mead', tol=1e-6,  callback=callback )
 
     if result.success:
@@ -86,7 +66,6 @@ def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=Non
         return fitted_params, result.fun
     else:
         raise ValueError(result.message)
-'''
 
 def minimizeCHI2_list(initial_guess, hexp_list, hsim_list, bounds=None,  binlow_list=None, binup_list=None):
     import scipy.optimize as optimize

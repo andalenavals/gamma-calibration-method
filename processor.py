@@ -5,11 +5,22 @@ def SaveInTH1(ch_sim, counts_sim, name, nbins, xlow, xup):
         h.SetBinContent(h.FindBin(ch_sim[i]), counts_sim[i])
     return h
 
-def FWHM(E, modelpars):
+def FWHM(E, modelpars, mflags=[True, True, True]):
     import numpy as np
-    a, b, c = modelpars
-    return a*E + b*np.sqrt(E) + c 
-def AddFWHM(h, name, modelpars):
+    af, bf, cf = mflags
+    if(af and bf and cf):
+        a, b, c = modelpars
+        return a*E + b*np.sqrt(E) + c
+    if(af and bf and not cf):
+        a, b= modelpars
+        return a*E + b*np.sqrt(E)
+    if(af and (not bf) and cf):
+        a, c= modelpars
+        return a*E + c
+    if((not af) and  bf and cf):
+        b, c= modelpars
+        return b*np.sqrt(E) + c
+def AddFWHM(h, name, modelpars, mflags=[True, True, True]):
     import random
     from ROOT import TH1I,  TRandom
     #seed = random.randint(0, 500)
@@ -19,7 +30,7 @@ def AddFWHM(h, name, modelpars):
     hout = TH1I(name,'', nbins, h.GetBinLowEdge(1), h.GetXaxis().GetBinUpEdge(nbins) )
     for i in range(1, nbins + 1):
         for j in range(1, int(h.GetBinContent(i))+ 1):
-            hout.Fill(ran.Gaus(h.GetBinCenter(i), FWHM(h.GetBinCenter(i), modelpars)/2.35  ))
+            hout.Fill(ran.Gaus(h.GetBinCenter(i), FWHM(h.GetBinCenter(i), modelpars, mflags=mflags)/2.35  ))
     return hout
 
 def CalFunction(x, calpars):

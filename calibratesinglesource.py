@@ -18,6 +18,9 @@ def parse_args():
     parser.add_argument('--initial_guess_file',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/initialparsNaI2x2_grid.yaml',
                         help='.yaml with the initial guess')
+    parser.add_argument('--mflags',
+                        default=[False, True, True],
+                        help='flags to consider a set of parameters in a model of three FWHM resolution a*E+b*sqrtE+c')
     parser.add_argument('--filename',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalparsNaI2x2_Na.yaml',
                         help='.yaml with the final minimization')
@@ -88,7 +91,7 @@ def main():
     while(binlow!=binlow_old or binup!=binup_old or chisq<chisqold ):
         print('Recursive iteration number',  n)
         binlow_old = binlow; binup_old = binup; chisqold = chisq
-        pars, chisq = minimizeCHI2(pars, hexp, hsim, binlow=binlow, binup=binup, pars_hist=pars_hist,  verbose=args.verbose)
+        pars, chisq = minimizeCHI2(pars, hexp, hsim, mflags=args.mflags,  binlow=binlow, binup=binup, pars_hist=pars_hist,  verbose=args.verbose)
        
         fwhmpars = pars[:3]
         calpars =  pars[3:]

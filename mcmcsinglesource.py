@@ -35,8 +35,9 @@ def parse_args():
 #More proper initial guess to not fall in local minima 
         
 def main():
+    import yaml
     import numpy as np
-    from processor import SaveInTH1, AddFWHM, Calibrate, GetScaleFactor, Scale, FindLowerNoEmptyUpbin,  FindHigherNoEmptyLowbin
+    from processor import SaveInTH1, GetNoEmptyLowbin, GetNoEmptyUpbin  
     from plotter import PrettyPlot,  plot_samplesdist
     from likelihood import minimizeCHI2,  chi2,  MCMC, minimizeCHI2_list,  chi2_list,  TransfSIM
     from ROOT import TCanvas,  gStyle, kFALSE
@@ -86,64 +87,13 @@ def main():
     binup = GetNoEmptyUpbin(hexp)
     print('Limit bins used:', binlow, binup)
 
-    #DEPURATING SELECTING PROPER HIGH AND LOW LIMIT
-    pars = i_guess; 
-    chisqold, chisq =  0, 1.e+10
-    binlow_old, binup_old = 0, 0
-    n = 0
-    if args.history:
-        historyfile = os.path.join(outpath, 'pars_history.txt')
-        pars_hist =  []
-    else:
-        historyfile =  None
-        pars_hist =  None
-
-    while(binlow!=binlow_old or binup!=binup_old or chisq<chisqold ):
-        print('Recursive iteration number',  n)
-        binlow_old = binlow; binup_old = binup; chisqold = chisq
-        pars, chisq = minimizeCHI2(pars, hexp, hsim, binlow=binlow, binup=binup, pars_hist=pars_hist,  verbose=args.verbose)
-       
-        fwhmpars = pars[:3]
-        calpars =  pars[3:]
-        print('FWHM pars a*E + b*np.sqrt(E) + c:',  fwhmpars)
-        print('Calibration pars mx +d:',  calpars)
-        print('Chisq_nu:',  chisq/(binup - binlow))
-
-        #Usually at large energies there is noise in the experiment with almost null counts, and for low energies 
-        #binlow, binup = FindNewLimits(hsim, hexp, pars)
-        
-        print('New binlow and binup:',  binlow, binup)
-        n += 1print("Fitting using only one source",  args.simfile)
-    #Save data in arrays
-    ch_sim, counts_sim = np.loadtxt(args.simfile, dtype=int, unpack=True)
-    ch_exp, counts_exp = np.loadtxt(args.measurefile, dtype=int, unpack=True)
-    nbins_exp, xlow_exp, xup_exp = len(ch_exp), min(ch_exp), max(ch_exp)
-    nbins_sim, xlow_sim, xup_sim = len(ch_sim), min(ch_sim), max(ch_sim)
-    hexp = SaveInTH1(ch_exp,counts_exp,'hist_exp',nbins_exp,xlow_exp,xup_exp)
-    hsim = SaveInTH1(ch_sim,counts_sim,'hist_sim',nbins_sim,xlow_sim,xup_sim)
- 
-   
-    stream = open(args.initial_guess_file, 'r')
-    parsfile = yaml.safe_load(stream.read())
-    fwhmpars = [parsfile['a'], parsfile['b'], parsfile['c']]
-    calpars = [ parsfile['m'], parsfile['d']]
-    i_guess =  fwhmpars + calpars
-    binlow =  parsfile['binlow']
-    binup =  parsfile['binup']
-    print('Initial parameters:',  parsfile)
-    chisq =  chi2(i_guess, hexp, hsim, binlow=binlow, binup=binup)
-    print('Initial Chisq_nu:',  chisq/(binup - binlow))
-
-    print('Initial low bin divergence',  binlow - GetNoEmptyLowbin(hexp))
-    print('Initial up bin divergence',  binup - GetNoEmptyUpbin(hexp))
-    binlow = GetNoEmptyLowbin(hexp)
-    binup = GetNoEmptyUpbin(hexp)
-    print('Limit bins used:', binlow, binup)
-
     
     ##MCMC withou the first parameter
     print('STARTING MCMC')
-    mflags = [False, True]
+    mflags = [False, True, True] #USE [a,b] parameters in the resolution
+    mask = mflags + [True]*2
+    i_guess = np.array(i_guess)[mask]
+    print('Initial Guess', i_guess)
     samples, chains =  MCMC(i_guess, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
     print('SAMPLES:' , samples)
     print('CHAINS:' , chains)

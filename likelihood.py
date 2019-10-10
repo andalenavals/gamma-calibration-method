@@ -6,20 +6,21 @@ import matplotlib.animation as animation
 #import matplotlib.patches as mpatches
 #import matplotlib.colors as colors
 
-def TransfSIM(hsim, pars, hexp, binlow=None, binup=None):
+def TransfSIM(hsim, pars, hexp, mflags=None, binlow=None, binup=None):
     from processor import AddFWHM,  Calibrate,  GetScaleFactor, Scale
-    fwhmpars =  pars[: 3]
-    calpars =  pars[3:]
-    hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars)
+    calpars =  pars[-2:]
+    fwhmpars =  pars[:len(pars)-len(calpars) ]
+    
+    hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars, mflags=mflags)
     hsim_fwhm_ch = Calibrate(hsim_fwhm, 'hist_sim_fwhm_cal', calpars, newbinwidth=1, xlow=0)
     scalefactor =  GetScaleFactor(hexp, hsim_fwhm_ch, binlow=binlow, binup=binup)
     hsim_fwhm_ch_sc = Scale(hsim_fwhm_ch, 'hist_sim_fwhm_cal_sc',  scalefactor )
     return hsim_fwhm_ch_sc
     
-def chi2(pars, hexp, hsim, binlow=None, binup=None):
+def chi2(pars, hexp, hsim, mflags=[True, True, True], binlow=None, binup=None):
     import numpy as np 
     chisqr = []
-    hsim_fwhm_ch_sc = TransfSIM(hsim, pars, hexp, binlow=binlow, binup=binup)
+    hsim_fwhm_ch_sc = TransfSIM(hsim, pars, hexp, mflags=mflags,  binlow=binlow, binup=binup)
     if binlow or binup is None:
         binlow = 1; binup = hexp.GetNbinsX()    
     for i in range(binlow, binup + 1):
@@ -39,7 +40,7 @@ def chi2_list(pars, hexp_list, hsim_list, binlow_list=None, binup_list=None):
     if (len(hexp_list)==len(hsim_list)):
         return np.array([chi2(pars, hexp_list[i], hsim_list[i], binlow=binlow_list[i], binup=binup_list[i]) for i in range(nexps)]).sum()
 
-def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=None,  pars_hist=None,  verbose=False):
+def minimizeCHI2(initial_guess, hexp, hsim, mflags=None,  binlow=None, binup=None,  pars_hist=None,  verbose=False):
     from plotter import PrettyPlot
     import numpy as np 
     import scipy.optimize as optimize
@@ -47,7 +48,7 @@ def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=Non
     if pars_hist is not None:
         chis =  [1.e+20]
         def callback(x):
-            chisq = chi2(x, hexp, hsim, binlow, binup)
+            chisq = chi2(x, hexp, hsim, mflags, binlow, binup)
             chis.append(chisq)
             if (chis[-1] < chis[-2]):
                 print('current parameters, chisq_nu:',  x,  chisq/(binup - binlow))
@@ -55,11 +56,11 @@ def minimizeCHI2(initial_guess, hexp, hsim, bounds=None,  binlow=None, binup=Non
                
     elif verbose and pars_hist is None:
         def callback(x):
-            chisq = chi2(x, hexp, hsim, binlow, binup)
+            chisq = chi2(x, hexp, hsim, mflags,binlow, binup)
             print('current parameters, chisq_nu:',   x,  chisq/(binup - binlow) )
     else: callback = None
     
-    result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, binlow, binup), method='Nelder-Mead', tol=1e-6,  callback=callback )
+    result = optimize.minimize(chi2, initial_guess,args=(hexp, hsim, mflags, binlow, binup), method='Nelder-Mead', tol=1e-6,  callback=callback )
 
     if result.success:
         fitted_params = result.x
@@ -78,28 +79,34 @@ def minimizeCHI2_list(initial_guess, hexp_list, hsim_list, bounds=None,  binlow_
 
 
 #Log natural of the prior 
-def logprior(pars, mflags=[True, True]):
+def logprior(pars, mflags=[True, True, True]):
     import numpy as np
-    aflag, bflag =  mflags
+    aflag, bflag, cflag =  mflags
     l = 1000
     a_min, b_min, c_min, m_min, d_min  = -l,-l,-l,-l,- l
     a_max, b_max, c_max, m_max, d_max  = l,l,l,l,l
-    if(aflag and bflag):
+    if(aflag and bflag and cflag):
         #print("Using a, b and delta")
         a, b, c, m, d = pars
         if ( a_min<a< a_max)and( b_min < b< b_max)and( c_min<c<c_max)and( m_min<m<m_max)and( d_min<d<d_max):
             return 0.0
         return -np.inf
-    elif(aflag and (not bflag)):
+    elif(aflag and (not bflag) and cflag):
         #print("Using a and c")
         a, c, m, d = pars
         if ( a_min<a< a_max)and(c_min<c<c_max)and( m_min<m<m_max)and( d_min<d<d_max):
             return 0.0
         return -np.inf
-    elif((not aflag) and bflag):
+    elif((not aflag) and bflag and cflag):
         #print("Using a and b")
         b, c,  m, d = pars
         if (c_min<c<c_max)and( b_min< b< b_max)and( m_min<m<m_max)and( d_min<d<d_max):
+            return 0.0
+        return -np.inf
+    elif(aflag and bflag and (not cflag) ):
+        #print("Using a and b")
+        a, b,  m, d = pars
+        if (a_min<a<a_max)and( b_min< b< b_max)and( m_min<m<m_max)and( d_min<d<d_max):
             return 0.0
         return -np.inf
     else:
@@ -112,9 +119,9 @@ def logprior(pars, mflags=[True, True]):
 def loglike(chisq):
     return -0.5*chisq
 ##Log natural of the posterior
-def logpost(pars, hexp, hsim, binlow=None, binup=None, mflags=[True, True]):
+def logpost(pars, hexp, hsim, binlow=None, binup=None, mflags=[True, True, True]):
     import numpy as np 
-    chisq = chi2(pars, hexp, hsim, binlow=binlow, binup=binup )
+    chisq = chi2(pars, hexp, hsim,mflags=mflags,  binlow=binlow, binup=binup )
     lp = logprior(pars, mflags=mflags)
     if not np.isfinite(lp):
         return -np.inf
@@ -138,12 +145,14 @@ def corner_plot(samples, labels, title):
     print("Printing file:",  title)
     plt.savefig(title)
     print(title, "Printed")
-def MCMC(best_pars, hexp, hsim, binlow=None, binup=None,  nwalkers=50, nsteps=1000,  mflags=[True, True]):
+def MCMC(best_pars, hexp, hsim, binlow=None, binup=None,  nwalkers=50, nsteps=1000,  mflags=[True, True, True]):
     import itertools
     import numpy as np
     import emcee
     import itertools
-    ndim =  len(list(itertools.compress(range(len(mflags)),  mflags))) + 3
+    print(mflags)
+    ndim =  len(list(itertools.compress(range(len(mflags)),  mflags))) + 2
+    print('NDIM:', ndim)
     pos = [best_pars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
     sampler = emcee.EnsembleSampler(nwalkers, ndim, logpost, threads=1,
                                     args=(hexp, hsim, binlow, binup, mflags))

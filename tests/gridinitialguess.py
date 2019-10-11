@@ -15,6 +15,9 @@ def parse_args():
     parser.add_argument('--measurefile',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/experiment/Exp_NaI2x2_22Na.dat',
                         help='.dat file of the experimental data')
+    parser.add_argument('--mflags',
+                        default=[False, True, True],
+                        help='flags to consider a set of parameters in a model of three FWHM resolution a*E+b*sqrtE+c')
     parser.add_argument('--filename',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/initialparsNaI2x2_grid.yaml',
                         help='.yaml with the final initial guess')
@@ -27,14 +30,15 @@ def parse_args():
     return args
 
 #More proper initial guess to not fall in local minima
-def FindInitialGuess(npoints, hexp, hsim, binlow=None, binup=None, filename='grid_initial_guess.yaml'):
+def FindInitialGuess(npoints, hexp, hsim, mflags=[True, True, True], binlow=None, binup=None, filename='grid_initial_guess.yaml'):
     import itertools
     import random
     from ROOT import TRandom
     import numpy as np
     from likelihood import chi2
     import yaml
-    data = {} 
+    data = {}
+    af, bf, cf = mflags
     
     #If for any reason the minimum is at a certain limit redefine limits around it
     seed = random.randint(0, 500)
@@ -42,19 +46,24 @@ def FindInitialGuess(npoints, hexp, hsim, binlow=None, binup=None, filename='gri
     ran = TRandom(seed)
     chiaux =  np.inf
     for step in range(npoints):
-        a = ran.Uniform(0,2)
-        b = ran.Uniform(0,2)
-        c = ran.Uniform(0,2)
         m = ran.Uniform(0,4)
-        d = ran.Uniform(-30,30)
-        pars = [a, b, c, m, d]
-        if (chi2(pars, hexp, hsim, binlow=binlow, binup=binup) < chiaux):
-            chiaux = chi2(pars, hexp, hsim, binlow=binlow, binup=binup)
+        d = ran.Uniform(-100,100)
+        calpars = [m, d]
+        fwhmpars = np.array([ran.Uniform(0,2), ran.Uniform(0,2), ran.Uniform(0,2)])[mflags].tolist() 
+        pars = fwhmpars + calpars
+        if (chi2(pars, hexp, hsim, mflags=mflags,  binlow=binlow, binup=binup) < chiaux):
+            chiaux = chi2(pars, hexp, hsim, mflags=mflags, binlow=binlow, binup=binup)
             fpars = pars
             print('step:',  step, 'pars:', pars, 'chisq:', chiaux)
-    data['a'] = fpars[0]; data['b'] = fpars[1]; data['c'] = fpars[2]; data['m'] = fpars[3]; data['d'] = fpars[4]
+
+    if (af and bf and cf):
+        data['a'] = float(pars[0]); data['b'] = float(pars[1]); data['c'] = float(pars[2])
+    if (bf and cf):
+        data['b'] = float(pars[0]); data['c'] = float(pars[1])
+    data['m'] = fpars[ -2]; data['d'] = fpars[ - 1]
     data['binlow'] = binlow
     data['binup'] =  binup
+    print('Printing',  filename)
     with open(filename, 'w') as outfile:
         yaml.dump(data, outfile, default_flow_style=False)
         
@@ -88,7 +97,7 @@ def main():
     filename = os.path.join(outpath, args.filename )
     binlow = 1
     binup = nbins_exp
-    i_guess =  FindInitialGuess(args.npoints, hexp, hsim, binlow=binlow, binup=binup, filename=filename)
+    i_guess =  FindInitialGuess(args.npoints, hexp, hsim, mflags=args.mflags, binlow=binlow, binup=binup, filename=filename)
     
    
 

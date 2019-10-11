@@ -16,7 +16,7 @@ def parse_args():
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/experiment/Exp_NaI2x2_22Na.dat',
                         help='.dat file of the experimental data')
     parser.add_argument('--initial_guess_file',
-                        default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalfits/singlesource/finalparsNaI2x2_22Na.yaml',
+                        default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalfits/singlesource/finalparsNaI2x2_22Na_bc.yaml',
                         help='.yaml with the initial guess')
     parser.add_argument('--plotspath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/plots',
                         help='location of the output of the files')
@@ -72,13 +72,19 @@ def main():
    
     stream = open(args.initial_guess_file, 'r')
     parsfile = yaml.safe_load(stream.read())
-    fwhmpars = [parsfile['a'], parsfile['b'], parsfile['c']]
+    fwhmpars = []; mflags = []
+    try: fwhmpars.append(parsfile['a']); mflags.append(True)
+    except: print('Parameter a does not exist'); mflags.append(False)
+    try: fwhmpars.append(parsfile['b']); mflags.append(True)
+    except: print('Parameter b does not exist'); mflags.append(False)
+    try: fwhmpars.append(parsfile['c']); mflags.append(True)
+    except: print('Parameter c does not exist'); mflags.append(False)
     calpars = [ parsfile['m'], parsfile['d']]
     i_guess =  fwhmpars + calpars
     binlow =  parsfile['binlow']
     binup =  parsfile['binup']
     print('Initial parameters:',  parsfile)
-    chisq =  chi2(i_guess, hexp, hsim, binlow=binlow, binup=binup)
+    chisq =  chi2(i_guess, hexp, hsim, mflags=mflags, binlow=binlow, binup=binup)
     print('Initial Chisq_nu:',  chisq/(binup - binlow))
 
     print('Initial low bin divergence',  binlow - GetNoEmptyLowbin(hexp))
@@ -90,9 +96,8 @@ def main():
     
     ##MCMC withou the first parameter
     print('STARTING MCMC')
-    mflags = [False, True, True] #USE [a,b] parameters in the resolution
+    print('model flags', mflags)
     mask = mflags + [True]*2
-    i_guess = np.array(i_guess)[mask]
     print('Initial Guess', i_guess)
     samples, chains =  MCMC(i_guess, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
     print('SAMPLES:' , samples)

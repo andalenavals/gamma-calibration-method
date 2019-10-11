@@ -24,7 +24,7 @@ def parse_args():
     parser.add_argument('--filename',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalparsNaI2x2_Na.yaml',
                         help='.yaml with the final minimization')
-    parser.add_argument('--outpath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method',
+    parser.add_argument('--outpath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data',
                         help='location of the output of the plots')
     parser.add_argument('--history', default=False, action='store_const', const=True, help='Save the history of the parameters while minimizing')
     parser.add_argument('--verbose', default=False, action='store_const', const=True, help='Print parameters during the process of minimization')
@@ -103,15 +103,14 @@ def main():
 
         #Usually at large energies there is noise in the experiment with almost null counts, and for low energies 
         #binlow, binup = FindNewLimits(hsim, hexp, pars)
-        
-        print('New binlow and binup:',  binlow, binup)
+        #print('New binlow and binup:',  binlow, binup)
         n += 1
 
     data = {}
     af, bf, cf = args.mflags
-    if (af, bf, cf):
+    if (af and bf and cf):
         data['a'] = float(pars[0]); data['b'] = float(pars[1]); data['c'] = float(pars[2])
-    if (bf, cf):
+    if (bf and cf):
         data['b'] = float(pars[0]); data['c'] = float(pars[1])
     data['m'] = float(calpars[0]); data['d'] = float(calpars[1])
     data['binlow'] = int(binlow)
@@ -122,9 +121,11 @@ def main():
         yaml.dump(data, outfile, default_flow_style=False)
     print('printing',  args.filename)
 
-
+    n= [['a','b','c'][i]*f for i,f in enumerate(args.mflags)]
+    header='%s %s %s m d'%(n[0],n[1],n[2])
+    
     if args.history:
-        np.savetxt(historyfile, pars_hist, fmt='%1.4e')
+        np.savetxt(historyfile, pars_hist, header=header,  fmt='%1.4e')
         print(historyfile, 'printed')
 if __name__ == "__main__":
     main()

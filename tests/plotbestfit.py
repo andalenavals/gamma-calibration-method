@@ -16,7 +16,7 @@ def parse_args():
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/experiment/Exp_NaI2x2_137Cs.dat',
                         help='.dat file of the experimental data')
     parser.add_argument('--parsfile',
-                        default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/initialparsNaI2x2.yaml',
+                        default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalfits/singlesource/finalparsNaI2x2_22Na_bc.yaml',
                         help='.yaml with the fitting data')
     parser.add_argument('--plotspath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/plots',
                         help='location of the output of the files')
@@ -43,7 +43,8 @@ def main():
     except OSError:
         if not os.path.exists(plotspath): raise
 
-   
+        
+    
 
     #Save data in arrays
     ch_sim, counts_sim = np.loadtxt(args.simfile, dtype=int, unpack=True)
@@ -58,16 +59,28 @@ def main():
     #NaI 22Na
     stream = open(args.parsfile, 'r')
     parsfile = yaml.safe_load(stream.read())
-    fwhmpars = [parsfile['a'], parsfile['b'], parsfile['c']]
+    
+    fwhmpars = []; mflags = []
+    try: fwhmpars.append(parsfile['a']); mflags.append(True)
+    except: print('Parameter a does not exist'); mflags.append(False)
+    try: fwhmpars.append(parsfile['b']); mflags.append(True)
+    except: print('Parameter b does not exist'); mflags.append(False)
+    try: fwhmpars.append(parsfile['c']); mflags.append(True)
+    except: print('Parameter c does not exist'); mflags.append(False)
+
+    #if(af and bf and cf):
+    #    fwhmpars = [parsfile['a'], parsfile['b'], parsfile['c']]
+    #if((not af) and bf and cf):
+    #    fwhmpars = [parsfile['b'], parsfile['c']]
     calpars = [ parsfile['m'], parsfile['d']]
     pars = fwhmpars + calpars
     binlow, binup = parsfile['binlow'], parsfile['binup']
-    print('chisq_red:', chi2(pars, hexp, hsim, binlow=binlow, binup=binup)/(binup - binlow) )
+    print('chisq_red:', chi2(pars, hexp, hsim, mflags=mflags, binlow=binlow, binup=binup)/(binup - binlow) )
 
      #Plots with the final estimate
     if(args.plots):
         print(binlow, binup)
-        hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars)
+        hsim_fwhm = AddFWHM(hsim, 'hist_sim_fwhm',  fwhmpars, mflags=mflags)
         hsim_fwhm_ch = Calibrate(hsim_fwhm, 'hist_sim_fwhm_cal', calpars, newbinwidth=1, xlow=0)
         scalefactor =  GetScaleFactor(hexp, hsim_fwhm_ch, binlow=binlow, binup=binup)
         print('the scale factor is', scalefactor)

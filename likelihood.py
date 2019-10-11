@@ -44,14 +44,16 @@ def minimizeCHI2(initial_guess, hexp, hsim, mflags=[True, True, True],  binlow=N
     from plotter import PrettyPlot
     import numpy as np 
     import scipy.optimize as optimize
+    
     if pars_hist is not None:
-        chis =  [1.e+20]
+        chis =  [np.inf]
         def callback(x):
             chisq = chi2(x, hexp, hsim, mflags, binlow, binup)
             chis.append(chisq)
             if (chis[-1] < chis[-2]):
                 print('current parameters, chisq_nu:',  x,  chisq/(binup - binlow))
-                pars_hist.append(x + [chisq])
+                pars_hist.append(x)
+                np.savetxt('pars_history.txt', pars_hist, fmt='%1.4e')
                
     elif verbose and pars_hist is None:
         def callback(x):
@@ -149,9 +151,7 @@ def MCMC(best_pars, hexp, hsim, binlow=None, binup=None,  nwalkers=50, nsteps=10
     import numpy as np
     import emcee
     import itertools
-    print(mflags)
     ndim =  len(list(itertools.compress(range(len(mflags)),  mflags))) + 2
-    print('NDIM:', ndim)
     pos = [best_pars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
     sampler = emcee.EnsembleSampler(nwalkers, ndim, logpost, threads=1,
                                     args=(hexp, hsim, binlow, binup, mflags))

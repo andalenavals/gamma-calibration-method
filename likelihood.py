@@ -32,16 +32,15 @@ def chi2(pars, hexp, hsim, mflags=[True, True, True], binlow=None, binup=None):
     return np.array(chisqr).sum()  
 
 #concatenation of expectras to get the total fit
-def chi2_list(pars, hexp_list, hsim_list, binlow_list=None, binup_list=None):
+def chi2_list(pars, hexp_list, hsim_list, mflags=[True, True, True], binlow_list=None, binup_list=None):
     import numpy as np
     nexps = len(hexp_list)
     if binlow_list == None: binlow_list =  [None]*nexps
     if binup_list == None: binup_list =  [None]*nexps 
     if (len(hexp_list)==len(hsim_list)):
-        return np.array([chi2(pars, hexp_list[i], hsim_list[i], binlow=binlow_list[i], binup=binup_list[i]) for i in range(nexps)]).sum()
+        return np.array([chi2(pars, hexp_list[i], hsim_list[i], mflags=mflags, binlow=binlow_list[i], binup=binup_list[i]) for i in range(nexps)]).sum()
 
 def minimizeCHI2(initial_guess, hexp, hsim, mflags=[True, True, True],  binlow=None, binup=None,  pars_hist=None,  verbose=False):
-    from plotter import PrettyPlot
     import numpy as np 
     import scipy.optimize as optimize
     
@@ -69,9 +68,28 @@ def minimizeCHI2(initial_guess, hexp, hsim, mflags=[True, True, True],  binlow=N
     else:
         raise ValueError(result.message)
 
-def minimizeCHI2_list(initial_guess, hexp_list, hsim_list, bounds=None,  binlow_list=None, binup_list=None):
+def minimizeCHI2_list(initial_guess, hexp_list, hsim_list, mflags=[True, True, True],  binlow_list=None, binup_list=None,  pars_hist=None,  verbose=False):
+    import numpy as np
     import scipy.optimize as optimize
-    result = optimize.minimize(chi2_list, initial_guess,args=(hexp_list, hsim_list, binlow_list, binup_list), method='Nelder-Mead', tol=1e-6)
+
+    if pars_hist is not None:
+        chis =  [np.inf]
+        def callback(x):
+            chisq = chi2_list(x, hexp_list, hsim_list, mflags, binlow_list, binup_list)
+            chis.append(chisq)
+            if (chis[-1] < chis[-2]):
+                ndof =  (np.array(binup_list) - np.array(binlow_list)).sum()
+                print('current parameters, chisq_nu:',  x,  chisq/ndof)
+                pars_hist.append(x)
+                np.savetxt('pars_history.txt', pars_hist, fmt='%1.4e')
+    elif verbose and pars_hist is None:
+        print("Verbose mode activated")
+        def callback(x):
+            chisq = chi2_list(x, hexp_list, hsim_list, mflags, binlow_list, binup_list)
+            ndof =  (np.array(binup_list) - np.array(binlow_list)).sum()
+            print('current parameters, chisq_nu:',  x,  chisq/ndof)
+    
+    result = optimize.minimize(chi2_list, initial_guess,args=(hexp_list, hsim_list, mflags,  binlow_list, binup_list), method='Nelder-Mead', tol=1e-6,  callback=callback)
     if result.success:
         fitted_params = result.x
         return fitted_params, result.fun
@@ -128,6 +146,14 @@ def logpost(pars, hexp, hsim, binlow=None, binup=None, mflags=[True, True, True]
         return -np.inf
     return lp + loglike(chisq)
 
+def logpost_list(pars, hexp_list, hsim_list, binlow_list=None, binup_list=None, mflags=[True, True, True]):
+    import numpy as np 
+    chisq = chi2_list(pars, hexp_list, hsim_list,mflags=mflags,  binlow_list=binlow_list, binup_list=binup_list )
+    lp = logprior(pars, mflags=mflags)
+    if not np.isfinite(lp):
+        return -np.inf
+    return lp + loglike(chisq)
+
 def corner_plot(samples, labels, title):
     import matplotlib
     matplotlib.use('Agg')
@@ -155,6 +181,38 @@ def MCMC(best_pars, hexp, hsim, binlow=None, binup=None,  nwalkers=50, nsteps=10
     pos = [best_pars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
     sampler = emcee.EnsembleSampler(nwalkers, ndim, logpost, threads=1,
                                     args=(hexp, hsim, binlow, binup, mflags))
+    print("Runing MCMC ...")
+    sampler.run_mcmc(pos, nsteps)
+    print("Run finished")
+
+    if(ndim ==4):
+        b_chain = sampler.chain[:,:,0]; b_chain_flat = np.reshape(b_chain, (nwalkers*nsteps,))
+        c_chain = sampler.chain[:,:,1]; c_chain_flat = np.reshape(c_chain, (nwalkers*nsteps,))
+        m_chain = sampler.chain[:,:,2]; m_chain_flat = np.reshape(m_chain, (nwalkers*nsteps,))
+        d_chain = sampler.chain[:,:,3]; d_chain_flat = np.reshape(d_chain, (nwalkers*nsteps,))
+        samples = np.c_[ b_chain_flat, c_chain_flat, m_chain_flat, d_chain_flat].T
+        chains = [ b_chain, c_chain, m_chain, d_chain]
+    elif(ndim==5):
+        a_chain = sampler.chain[:,:,0]; a_chain_flat = np.reshape(a_chain, (nwalkers*nsteps,))
+        b_chain = sampler.chain[:,:,1]; b_chain_flat = np.reshape(b_chain, (nwalkers*nsteps,))
+        c_chain = sampler.chain[:,:,2]; c_chain_flat = np.reshape(c_chain, (nwalkers*nsteps,))
+        m_chain = sampler.chain[:,:,3]; m_chain_flat = np.reshape(m_chain, (nwalkers*nsteps,))
+        d_chain = sampler.chain[:,:,4]; d_chain_flat = np.reshape(d_chain, (nwalkers*nsteps,))
+        samples = np.c_[a_chain_flat, b_chain_flat, c_chain_flat, m_chain_flat, d_chain_flat].T
+        chains = [a_chain, b_chain, c_chain, m_chain, d_chain]
+    sampler.reset()
+    return samples, chains
+def MCMC_list(best_pars, hexp_list, hsim_list, binlow_list=None, binup_list=None,  nwalkers=50, nsteps=1000,  mflags=[True, True, True]):
+
+    import itertools
+    import numpy as np
+    import emcee
+    import itertools
+    ndim =  len(list(itertools.compress(range(len(mflags)),  mflags))) + 2
+    pos = [best_pars + 1e-4*np.random.randn(ndim) for i in range(nwalkers)]
+
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, logpost_list, threads=5,
+                                    args=(hexp_list, hsim_list, binlow_list, binup_list, mflags))
     print("Runing MCMC ...")
     sampler.run_mcmc(pos, nsteps)
     print("Run finished")

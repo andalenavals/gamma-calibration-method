@@ -18,9 +18,6 @@ def parse_args():
     parser.add_argument('--initial_guess_file',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/initialparsNaI2x2_grid.yaml',
                         help='.yaml with the initial guess')
-    parser.add_argument('--mflags',
-                        default=[False, True, True],
-                        help='flags to consider a set of parameters in a model of three FWHM resolution a*E+b*sqrtE+c')
     parser.add_argument('--filename',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalparsNaI2x2_Na.yaml',
                         help='.yaml with the final minimization')
@@ -61,15 +58,20 @@ def main():
    
     stream = open(args.initial_guess_file, 'r')
     parsfile = yaml.safe_load(stream.read())
-    fwhmpars = [parsfile['a'], parsfile['b'], parsfile['c']]
+    fwhmpars = []; mflags = []
+    try: fwhmpars.append(parsfile['a']); mflags.append(True)
+    except: print('Parameter a does not exist'); mflags.append(False)
+    try: fwhmpars.append(parsfile['b']); mflags.append(True)
+    except: print('Parameter b does not exist'); mflags.append(False)
+    try: fwhmpars.append(parsfile['c']); mflags.append(True)
+    except: print('Parameter c does not exist'); mflags.append(False)
     calpars = [ parsfile['m'], parsfile['d']]
     i_guess =  fwhmpars + calpars
-    i_guess = np.array(i_guess)[args.mflags + [True]*2]
     binlow =  parsfile['binlow']
     binup =  parsfile['binup']
     print('Initial parameters file:',  parsfile)
     print('Initial parameters:',  i_guess)
-    chisq =  chi2(i_guess, hexp, hsim, mflags=args.mflags, binlow=binlow, binup=binup)
+    chisq =  chi2(i_guess, hexp, hsim, mflags=mflags, binlow=binlow, binup=binup)
     print('Initial Chisq_nu:',  chisq/(binup - binlow))
 
     print('Initial low bin divergence',  binlow - GetNoEmptyLowbin(hexp))
@@ -80,7 +82,7 @@ def main():
 
     #START THE ITERATION
     pars = i_guess; 
-    chisqold, chisq =  0, 1.e+10
+    chisqold, chisq =  np.inf, 0
     binlow_old, binup_old = 0, 0
     n = 0
     if args.history:
@@ -93,7 +95,7 @@ def main():
     while(binlow!=binlow_old or binup!=binup_old or chisq<chisqold ):
         print('Recursive iteration number',  n)
         binlow_old = binlow; binup_old = binup; chisqold = chisq
-        pars, chisq = minimizeCHI2(pars, hexp, hsim, mflags=args.mflags,  binlow=binlow, binup=binup, pars_hist=pars_hist,  verbose=args.verbose)
+        pars, chisq = minimizeCHI2(pars, hexp, hsim, mflags=mflags,  binlow=binlow, binup=binup, pars_hist=pars_hist,  verbose=args.verbose)
        
         calpars =  pars[-2:]
         fwhmpars =  pars[:len(pars)-len(calpars) ]
@@ -107,7 +109,7 @@ def main():
         n += 1
 
     data = {}
-    af, bf, cf = args.mflags
+    af, bf, cf = mflags
     if (af and bf and cf):
         data['a'] = float(pars[0]); data['b'] = float(pars[1]); data['c'] = float(pars[2])
     if (bf and cf):
@@ -121,7 +123,7 @@ def main():
         yaml.dump(data, outfile, default_flow_style=False)
     print('printing',  args.filename)
 
-    n= [['a','b','c'][i]*f for i,f in enumerate(args.mflags)]
+    n= [['a','b','c'][i]*f for i,f in enumerate(mflags)]
     header='%s %s %s m d'%(n[0],n[1],n[2])
     
     if args.history:

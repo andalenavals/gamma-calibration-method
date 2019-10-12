@@ -7,7 +7,7 @@ plt.style.use('SVA1StyleSheet.mplstyle')
 
 def parse_args():
     import argparse
-    parser = argparse.ArgumentParser(description='Finding best resolution and energy calibration parameters comparing Geant4 simulations and experiment. Concatinating response function to different sources of the same experimental sutup')
+    parser = argparse.ArgumentParser(description='Finding best resolution and energy calibration parameters comparing Geant4 simulations and experiment. Errors in the esmatimated parameters are calculated using MCMC and marginalization of the posterior distribution.')
     
     parser.add_argument('--simfiles',
                         default=['/data/publishing/gamma_calibration_method/gamma-calibration-method/data/sims/Sim_NaI2x2_22Na.dat',
@@ -20,23 +20,28 @@ def parse_args():
     parser.add_argument('--initial_guess_file',
                         default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalfits/singlesource/finalNaI2x2_22Na_bc.yaml',
                         help='.yaml with the initial guess')
-    parser.add_argument('--filename',
-                        default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data/finalparsNaI2x2_Na.yaml',
-                        help='.yaml with the final minimization')
-    parser.add_argument('--outpath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/data',
+    parser.add_argument('--plotspath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/plots',
+                        help='location of the output of the files')
+    parser.add_argument('--outpath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method',
                         help='location of the output of the plots')
-    parser.add_argument('--history', default=False, action='store_const', const=True, help='Save the history of the parameters while minimizing')
-    parser.add_argument('--verbose', default=False, action='store_const', const=True, help='Print parameters during the process of minimization')
+    parser.add_argument('--nsig', default=1, type=int, 
+                        help='How many sigmas for the marginalized confidence interval')
+    parser.add_argument('--nsteps', default=1000, type=int, 
+                        help='nsteps of MCMC')
+    parser.add_argument('--nwalkers', default=100, type=int, 
+                        help='nwalkers of MCMC')
     args = parser.parse_args()
 
     return args
+
+#More proper initial guess to not fall in local minima 
         
 def main():
-    import numpy as np
     import yaml
-    from processor import SaveInTH1,FindNewLimits,  GetNoEmptyLowbin,  GetNoEmptyUpbin
+    import numpy as np
+    from processor import SaveInTH1, GetNoEmptyLowbin, GetNoEmptyUpbin  
     from plotter import PrettyPlot,  plot_samplesdist
-    from likelihood import minimizeCHI2,  chi2,  MCMC, minimizeCHI2_list,  chi2_list,  TransfSIM
+    from likelihood import minimizeCHI2,  chi2,  MCMC, MCMC_list, minimizeCHI2_list,  chi2_list,  TransfSIM
     from ROOT import TCanvas,  gStyle, kFALSE
 
     args = parse_args()
@@ -47,6 +52,13 @@ def main():
             os.makedirs(outpath)
     except OSError:
         if not os.path.exists(outpath): raise
+
+    plotspath = os.path.expanduser(args.plotspath)
+    try:
+        if not os.path.exists(plotspath):
+            os.makedirs(plotspath)
+    except OSError:
+        if not os.path.exists(plotspath): raise
 
     print("Fitting using", len(args.simfiles) , " sources:",  args.simfiles)
     #Concatenation all the spectra of the same detector for a unique fit
@@ -85,60 +97,25 @@ def main():
     ndof =  (np.array(binup_list) - np.array(binlow_list)).sum()
     print('Initial Chisq_nu:',  chisq/ndof)
 
+    
+    ##MCMC withou the first parameter
+    print('STARTING MCMC')
+    print('model flags', mflags)
+    mask = mflags + [True]*2
+    print('Initial Guess', i_guess)
+    samples, chains =  MCMC_list(i_guess, hexp_list, hsim_list, binlow_list=binlow_list, binup_list=binup_list, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
+    print('SAMPLES:' , samples)
+    print('CHAINS:' , chains)
+    np.savetxt(os.path.join(outpath, 'samples.txt'), samples, fmt='%1.4e')
+    np.savetxt(os.path.join(outpath, 'chains.txt'), chains, fmt='%1.4e')
+    mcmcpath = os.path.join(plotspath, 'mcmc_walkers.png')
+    parscontoursparth = os.path.join(plotspath, 'par_contours.png')
+    plot_samplesdist(samples, chains, mflags, args.nwalkers, args.nsteps, mcmcpath, parscontoursparth )
+    print('MCMC finished')
 
-    #START THE ITERATION
-    pars = i_guess; 
-    chisqold, chisq =  np.inf,  0
-    n = 0
-    if args.history:
-        historyfile = os.path.join(outpath, 'pars_history.txt')
-        pars_hist =  []
-    else:
-        historyfile =  None
-        pars_hist =  None
-
-    while( chisq<chisqold ):
-        print('Recursive iteration number',  n)
-        chisqold = chisq
-        pars, chisq = minimizeCHI2_list(pars, hexp_list, hsim_list,
-                                        mflags=mflags, binlow_list=binlow_list, binup_list=binup_list,
-                                        pars_hist=pars_hist, verbose=args.verbose)
-       
-        calpars =  pars[-2:]
-        fwhmpars =  pars[:len(pars)-len(calpars) ]
-        print('FWHM pars a*E + b*np.sqrt(E) + c:',  fwhmpars)
-        print('Calibration pars mx +d:',  calpars)
-        ndof =  (np.array(binup_list) - np.array(binlow_list)).sum()
-        print('Chisq_nu:',  chisq/ndof)
-
-        binlow_list = [FindNewLimits(hsim_list[i], hexp_list[i], pars, mflags=mflags)[0] for i in range(nexps)] 
-        binup_list = [FindNewLimits(hsim_list[i], hexp_list[i], pars, mflags=mflags)[1]  for i in range(nexps)]
-        
-        n += 1
 
                 
-
-    data = {}
-    af, bf, cf = mflags
-    if (af and bf and cf):
-        data['a'] = float(pars[0]); data['b'] = float(pars[1]); data['c'] = float(pars[2])
-    if (bf and cf):
-        data['b'] = float(pars[0]); data['c'] = float(pars[1])
-    data['m'] = float(calpars[0]); data['d'] = float(calpars[1])
-    data['binlow'] = int(binlow)
-    data['binup'] =  int(binup)
-    data['chisq'] = float(chisq/(binup - binlow))
-    print(data)
-    with open(args.filename, 'w') as outfile:
-        yaml.dump(data, outfile, default_flow_style=False)
-    print('printing',  args.filename)
-
-    n= [['a','b','c'][i]*f for i,f in enumerate(mflags)]
-    header='%s %s %s m d'%(n[0],n[1],n[2])
-    
-    if args.history:
-        np.savetxt(historyfile, pars_hist, header=header,  fmt='%1.4e')
-        print(historyfile, 'printed')
+          
 
 
 

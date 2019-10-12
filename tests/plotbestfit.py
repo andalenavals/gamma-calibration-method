@@ -67,11 +67,6 @@ def main():
     except: print('Parameter b does not exist'); mflags.append(False)
     try: fwhmpars.append(parsfile['c']); mflags.append(True)
     except: print('Parameter c does not exist'); mflags.append(False)
-
-    #if(af and bf and cf):
-    #    fwhmpars = [parsfile['a'], parsfile['b'], parsfile['c']]
-    #if((not af) and bf and cf):
-    #    fwhmpars = [parsfile['b'], parsfile['c']]
     calpars = [ parsfile['m'], parsfile['d']]
     pars = fwhmpars + calpars
     binlow, binup = parsfile['binlow'], parsfile['binup']

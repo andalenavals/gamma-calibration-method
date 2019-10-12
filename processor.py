@@ -97,10 +97,10 @@ def FindLowerNoEmptyUpbin(h1, h2):
     if (ubin1>ubin2): return ubin2
     else: return ubin1
 
-def FindNewLimits(hsim, hexp, pars ):
-    fwhmpars = pars[:3]
-    calpars =  pars[3:]
-    hsim_fwhm_aux = AddFWHM(hsim, 'hist_sim_fwhm_aux',  fwhmpars)
+def FindNewLimits(hsim, hexp, pars, mflags=[True, True, True] ):
+    calpars =  pars[-2:]
+    fwhmpars =  pars[:len(pars)-len(calpars) ]
+    hsim_fwhm_aux = AddFWHM(hsim, 'hist_sim_fwhm_aux',  fwhmpars, mflags=mflags)
     hsim_fwhm_ch_aux = Calibrate(hsim_fwhm_aux, 'hist_sim_fwhm_cal_aux', calpars, newbinwidth=1, xlow=0)
     binlow = FindHigherNoEmptyLowbin(hexp, hsim_fwhm_ch_aux)
     binup = FindLowerNoEmptyUpbin(hexp, hsim_fwhm_ch_aux)

@@ -19,7 +19,7 @@ def parse_args():
                         default=[False, True, True],
                         help='Flags to select parameter of a FWH model')
     parser.add_argument('--parshistory',
-                        default='/data/publishing/gamma_calibration_method/gamma-calibration-method/pars_history.txt',
+                        default='/data/publishing/gamma_calibration_method/gamma-calibration-method/pars_history3.txt',
                         help='.yaml with the fitting data')
     parser.add_argument('--plotspath', default='/data/publishing/gamma_calibration_method/gamma-calibration-method/plots',
                         help='location of the output of the files')

@@ -102,18 +102,15 @@ def main():
     samples, chains =  MCMC(i_guess, hexp, hsim, binlow=binlow, binup=binup, nwalkers=args.nwalkers,  nsteps=args.nsteps,  mflags=mflags)
     print('SAMPLES:' , samples)
     print('CHAINS:' , chains)
+    np.savetxt(os.path.join(outpath, 'samples.txt'), samples, fmt='%1.4e')
+    np.savetxt(os.path.join(outpath, 'chains.txt'), chains, fmt='%1.4e')
     mcmcpath = os.path.join(plotspath, 'mcmc_walkers.png')
     parscontoursparth = os.path.join(plotspath, 'par_contours.png')
-    if args.plots: plot_samplesdist(samples, chains, mflags, args.nwalkers, args.nsteps, mcmcpath, parscontoursparth )
+    plot_samplesdist(samples, chains, mflags, args.nwalkers, args.nsteps, mcmcpath, parscontoursparth )
     print('MCMC finished')
 
 
-                
-          
-
-
-
-                             
+                                   
 if __name__ == "__main__":
     main()
 
